@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="0187e617-a9f3-4419-87e7-c431991d5920" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="1569ca53-26a1-41b6-a11c-f2173a83b1bd" >
+		<salesforce:basic-connection username="${sf.username}" password="${sf.password}" securityToken="${sf.token}" />
+	</salesforce:sfdc-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="359b8243-1489-4661-bad5-81fea8a1fcda" file="config.yaml" />
+	<flow name="talk-to-salesforce" doc:id="216cf492-5927-4777-b665-8e23d29f8173" >
+		<http:listener doc:name="Listener" doc:id="2a6311a7-dcd6-43ad-82af-de5da662a787" config-ref="HTTP_Listener_config" path="/group" allowedMethods="POST"/>
+		<logger level="INFO" doc:name="Logger" doc:id="e536dfe9-ffa0-435b-bcb9-8e666b55c388" message="#[payload]"/>
+		<ee:transform doc:name="Transform Message" doc:id="6247ff5c-461e-42c4-9041-5b71e497311c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="validate" doc:id="d78326a9-f607-447b-bddc-7ecff8fe4882" name="validate"/>
+		<choice doc:name="Choice" doc:id="f5832267-600b-460f-844b-781484543d1c" >
+		<when expression="#[vars.action == 'list_user']">
+				<logger level="INFO" doc:name="Logger" doc:id="b4892296-2901-414f-9799-4c266b48c611" message="list user in group" />
+				<salesforce:query doc:name="group" doc:id="03735e85-b53b-447c-9a1e-3f7314ac124f" config-ref="Salesforce_Config" >
+					<salesforce:salesforce-query ><![CDATA[SELECT Id, Name, DeveloperName, Type from Group
+WHERE Name LIKE '%:groupname%' limit 100]]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[output application/java
+---
+{
+	"groupname" : vars.groupName
+}]]]></salesforce:parameters>
+				</salesforce:query>
+				<logger level="INFO" doc:name="Logger" doc:id="60ae48b5-d30d-4f56-8433-a2abb7fe6f97" message="payload"/>
+				<set-variable value="#[payload[0].Name]" doc:name="groupname" doc:id="e8f1de7f-d43d-477f-b457-b4e9db436386" variableName="groupname" />
+				<set-variable value="#[payload[0].Id]" doc:name="groupid" doc:id="f62cd03a-1371-44de-a100-bbd5b20332b2" variableName="groupid"/>
+				<salesforce:query doc:name="GroupMember" doc:id="9b593924-60d4-4db0-9eb4-a6d352d61374" config-ref="Salesforce_Config">
+					<salesforce:salesforce-query ><![CDATA[SELECT Id, GroupId, Group.DeveloperName, UserOrGroupId  from GroupMember
+WHERE GroupId = ':groupid' limit 100]]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[output application/java
+---
+{
+	"groupid" : vars.groupid
+}]]]></salesforce:parameters>
+				</salesforce:query>
+				<set-variable value="#['(\'' ++ (payload.UserOrGroupId joinBy '\',\'') ++ '\')']" doc:name="listuserid" doc:id="df2748a3-9e72-4cb7-bd20-efb168b11643" variableName="listuserid"/>
+				<salesforce:query doc:name="user" doc:id="bbdc4e21-5f29-43ac-be0a-c77ddbf51e62" config-ref="Salesforce_Config">
+					<salesforce:salesforce-query ><![CDATA[SELECT Id, Name, Username  from user
+WHERE Id IN :listuserid limit 100]]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[output application/java
+---
+{
+	"listuserid" : vars.listuserid
+}]]]></salesforce:parameters>
+				</salesforce:query>
+				<set-variable value="#[(payload map (value, index) -&gt; value.Name ++ ' ' ++ value.Username default '') joinBy &quot;\n&quot;]" doc:name="listuser" doc:id="230a1190-cf5d-47a1-a273-8e1ed59bc06a" variableName="listuser"/>
+				<ee:transform doc:name="Transform Message" doc:id="25d79e2d-9c1c-4894-b632-9d1f0bc2f9b7" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+"list user in group " ++ vars.groupName ++ ':\n' ++ vars.listuser]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			
+</when>
+			<when expression="#[vars.action == 'list']">
+				<logger level="INFO" doc:name="Copy_of_Logger" doc:id="41f8e0d4-e447-4df5-b729-527992a214a3" message="list all group" />
+				<salesforce:query doc:name="all group" doc:id="bce8c746-1170-4c45-bc41-39dee658d93b" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query><![CDATA[SELECT Id, Name, DeveloperName, Type from Group limit 100]]></salesforce:salesforce-query>
+		</salesforce:query>
+				<ee:transform doc:name="Transform Message" doc:id="b450f0b6-ad0c-4449-9a6c-3ad3be01c9d0" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload filter ((item, index) -> item.Name != null)]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value='#[payload map ((value, index) -&gt; value.DeveloperName) joinBy "\n"]' doc:name="listGroup" doc:id="1889200e-4d89-4729-898d-dbdc8533bf09" variableName="listGroup"/>
+				<ee:transform doc:name="Copy_of_Transform Message" doc:id="8664653b-b137-48bf-9315-5cac79795054" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+"list group " ++ ':\n' ++ vars.listGroup]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<when expression="#[vars.action == 'add']">
+				<logger level="INFO" doc:name="Logger" doc:id="4eec6896-f0b1-4304-bef8-bca667dc50cf" message="add user"/>
+				<salesforce:query doc:name="group" doc:id="7f2bdfaa-d42c-4ef6-b5d2-f749c279ac75" config-ref="Salesforce_Config" >
+					<salesforce:salesforce-query ><![CDATA[SELECT Id, Name, DeveloperName, Type from Group
+WHERE Name LIKE '%:groupname%' limit 100]]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[output application/java
+---
+{
+	"groupname" : vars.groupName
+}]]]></salesforce:parameters>
+				</salesforce:query>
+				<logger level="INFO" doc:name="payload" doc:id="ed892de9-38b7-4013-be59-b23b9429e4d8" message="#[payload]" />
+				<set-variable value="#[payload[0].Id]" doc:name="groupid" doc:id="f1b18c8a-11f0-4676-848e-0bd8db62d893" variableName="groupid" />
+				<salesforce:query doc:name="user" doc:id="cdb01e29-38eb-432f-82d0-8c91b7d044fb" config-ref="Salesforce_Config">
+					<salesforce:salesforce-query><![CDATA[SELECT Id, Name, username from User
+WHERE username = ':user' limit 100]]></salesforce:salesforce-query>
+					<salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"user" : vars.user
+}]]]></salesforce:parameters>
+				</salesforce:query>
+				<ee:transform doc:name="Transform Message" doc:id="10637dc6-e073-41f7-b82e-485a2aeed337">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	GroupId: vars.groupid as String,
+	UserOrGroupId: payload01.Id
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<salesforce:create type="GroupMember" doc:name="Create" doc:id="a352db21-d39e-45ff-ab99-b769b7d43366" config-ref="Salesforce_Config" />
+				<ee:transform doc:name="Transform Message" doc:id="c2c24551-130e-42ff-8584-91d0b874222b" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<choice doc:name="Copy_of_Choice" doc:id="65633076-5838-4e83-bb49-690cecb56533" >
+					<when expression="#[payload.successful]" >
+						<logger level="INFO" doc:name="_Logger" doc:id="f8d28481-ed45-447c-8769-f16490377abb" />
+						<ee:transform doc:name="Transform Message" doc:id="ae8bbc8e-f713-45db-a54e-6495bfa7499e" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+"Mule: user " ++ vars.user ++ ' add to group ' ++ vars.groupName]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger" doc:id="cff2ae23-250a-473d-8c00-1de2fdfc98b0" message="failed to insert" />
+						<ee:transform doc:name="Transform Message" doc:id="21966dbc-d187-4122-9bcb-563529a9e91f" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+"Mule: error user " ++ vars.user ++ ' not add to group ' ++ vars.groupName]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<when expression="#[vars.action == 'remove']">
+				<logger level="INFO" doc:name="Logger" doc:id="3d755fb4-c30c-4bc6-9ea6-ac19170cbcbf" message="remove user"/>
+				<salesforce:query doc:name="group" doc:id="21a67ff4-557c-4638-b314-76ac50c53ea7" config-ref="Salesforce_Config" >
+					<salesforce:salesforce-query ><![CDATA[SELECT Id, Name, DeveloperName, Type from Group
+WHERE Name LIKE '%:groupname%' limit 100]]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[output application/java
+---
+{
+	"groupname" : vars.groupName
+}]]]></salesforce:parameters>
+				</salesforce:query>
+				<logger level="INFO" doc:name="payload" doc:id="6b2c1a33-6d99-4c1a-9311-117d0f16d32d" message="#[payload]" />
+				<set-variable value="#[payload[0].Id]" doc:name="groupid" doc:id="7c3f55aa-afa8-430b-9203-aac8193b2872" variableName="groupid" />
+				<salesforce:query doc:name="user" doc:id="2dfedc2f-7d19-47b0-b637-5f5bf5d1c14a" config-ref="Salesforce_Config" >
+					<salesforce:salesforce-query ><![CDATA[SELECT Id, Name, username from User
+WHERE username = ':user' limit 100]]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[output application/java
+---
+{
+	"user" : vars.user
+}]]]></salesforce:parameters>
+				</salesforce:query>
+				<set-variable value="#[payload[0].Id]" doc:name="userid" doc:id="14758a0e-7f76-4eb0-a491-918f1a914f7a" variableName="userid"/>
+				<salesforce:query doc:name="GroupMember" doc:id="e60ee98b-51c6-4266-bee4-d1316f235804" config-ref="Salesforce_Config">
+					<salesforce:salesforce-query><![CDATA[SELECT Id, GroupId, Group.DeveloperName, UserOrGroupId  from GroupMember
+WHERE UserOrGroupId = ':userid' limit 100]]></salesforce:salesforce-query>
+					<salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"userid" : vars.userid
+}]]]></salesforce:parameters>
+				</salesforce:query>
+				<ee:transform doc:name="Copy_of_Transform Message" doc:id="0ea16abf-4972-439f-b8b6-b67ee787963e" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload map ( payload01 , indexOfPayload01 ) -> 
+	payload01.Id]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<salesforce:delete doc:name="Delete" doc:id="23dc1b10-a8f8-477d-a273-eb2c15237751" config-ref="Salesforce_Config"/>
+				<ee:transform doc:name="Transform Message" doc:id="92f2086b-3eb0-4b73-9e25-7142defb2cff" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<choice doc:name="Choice" doc:id="b1d42c0a-c6f5-410c-8fbd-3a124a26547d" >
+					<when expression="#[payload.successful]" >
+						<logger level="INFO" doc:name="Logger" doc:id="37b33820-7e82-46c7-b81a-4ba4a85e79eb" message="success"/>
+						<ee:transform doc:name="Message" doc:id="835ed9db-e790-4f8d-82f4-74267a49ee3e" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+"Mule: user " ++ vars.user ++ ' remove to group ' ++ vars.groupName]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger" doc:id="caa08cc4-4d71-49dd-99ae-0a4a1c0ce98f" message="failed to insert" />
+						<ee:transform doc:name="Message" doc:id="e6f38e7b-8dee-4f00-b23d-15615a8f2612" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+"Mule: error user " ++ vars.user ++ ' not remove to group ' ++ vars.groupName]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="f29e73b0-2fd4-4613-b6ab-73afc43b9121" message="no text" />
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="00076ae4-fd52-49fb-a08e-188b92fd8a2c" type="VALIDATION:BLANK_STRING">
+				<ee:transform doc:name="payload error continue" doc:id="e116ebd7-4ceb-4045-802c-28afc4f76b3a" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="validate" doc:id="9b8e0c44-316a-46e9-9e16-641cfb8d682e" >
+		<validation:is-not-blank-string doc:name="Is not blank string" doc:id="4ad8b674-6864-47ae-aa6c-570e1cdcde22" value="#[payload.text]" message="no text"/>
+		<logger level="INFO" doc:name="Logger" doc:id="ea61c604-9cd8-4c01-9721-9a5278387015" message="#[payload]"/>
+		<set-variable value="#[(payload.text as String default &quot;&quot;) splitBy ' ']" doc:name="array" doc:id="4253da18-0e7c-4fa1-b8da-8696d3998244" variableName="array"/>
+		<set-variable value='#[lower(vars.array[0])]' doc:name="command" doc:id="22c1ebe4-8285-4a0e-814d-0a5abe598509" variableName="command"/>
+		<validation:is-true doc:name="command valid" doc:id="36d87499-5582-4bed-b879-e12f3b9abc57" expression="#[['list', 'add', 'remove'] contains lower(vars.command)]" message="invalid command"/>
+		<choice doc:name="Choice" doc:id="8c172054-cbe7-4031-b949-6cf99b1c111f" >
+			<when expression="#[vars.array[0] == 'add' and sizeOf(vars.array) &gt;= 3]">
+				<logger level="INFO" doc:name="Logger" doc:id="a9ae0f24-d9f9-43ce-8cd0-b0be7d583b6d" message="in action add"/>
+				<set-variable value="add" doc:name="action" doc:id="07cb944a-19ae-48e3-88ec-abd22be1ac56" variableName="action"/>
+				<set-variable value="#[vars.array[1]]" doc:name="user" doc:id="2d961535-3477-4b9c-ac68-eab04e2b7a9c" variableName="user"/>
+				<set-variable value="#[vars.array[2]]" doc:name="groupName" doc:id="fbf54a04-5653-475e-a950-33851b0e5ca0" variableName="groupName"/>
+			</when>
+			<when expression="#[vars.array[0] == 'remove' and sizeOf(vars.array) &gt;= 3]">
+				<logger level="INFO" doc:name="Logger" doc:id="1c0b66dc-cd59-4511-8d12-cf1cf3d486f7" message="in remove"/>
+				<set-variable value="remove" doc:name="action" doc:id="d6543f96-f6b5-4245-94bc-cf08a5a3e45d" variableName="action" />
+				<set-variable value="#[vars.array[1]]" doc:name="user" doc:id="c2a69a4a-654e-40d0-b2b6-e35b295bd836" variableName="user" />
+				<set-variable value="#[vars.array[2]]" doc:name="groupName" doc:id="80968b5d-496b-4ae3-ad30-6c20854fad00" variableName="groupName" />
+			</when>
+			<when expression="#[vars.array[0] == 'list' and sizeOf(vars.array) == 1]">
+				<logger level="INFO" doc:name="Logger" doc:id="75671122-8cb2-4269-a30f-e9c88f0e2be1" message="in action list group"/>
+				<set-variable value="list" doc:name="action" doc:id="2391e7ba-3fdd-4bf5-acdd-6e458d350673" variableName="action" />
+			</when>
+			<when expression="vars.array[0] == 'list' and sizeOf(vars.array) == 2">
+				<logger level="INFO" doc:name="Logger" doc:id="86b03d22-a570-4baf-b7dd-0b167d326199" message="in list user"/>
+				<set-variable value="list_user" doc:name="action" doc:id="6801bb65-8a8c-4376-a467-73a13e010a44" variableName="action" />
+				<set-variable value="#[vars.array[1]]" doc:name="groupName" doc:id="31a849fc-a176-4664-97b3-90245acc110a" variableName="groupName" />
+			</when>
+			<otherwise>
+				<logger level="INFO" doc:name="Logger" doc:id="05a552c8-2327-4b80-8c09-edad035f8638" message="default choice"/>
+			</otherwise>
+		</choice>
+		<logger level="INFO" doc:name="Logger" doc:id="259a3722-f7ab-46da-8cda-e6dfe8d9f78d" message="#[vars.groupName]"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="411fca0e-826a-45dc-be40-d671cd4a1010" type="VALIDATION:BLANK_STRING">
+				<ee:transform doc:name="Transform Message" doc:id="c6307cd2-20e5-4bcf-b674-5c135b4394aa" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+"USAGE
+  /group [COMMAND]
+
+COMMANDS
+  list
+	list all public group
+  list   [GROUP NAME]
+	list members group
+  add    [GROUP NAME] [Username]
+	add user in group
+  remove [GROUP NAME] [Username]
+	remove user in group"
+]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>

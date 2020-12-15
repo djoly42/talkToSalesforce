@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<types:mule xmlns:types="http://www.mulesoft.org/schema/mule/types">
+  <types:catalog>
+    <types:type name="list_group" format="json">
+      <types:shape format="weave" example="examples/list_group.json"><![CDATA[%dw 2.0
+
+type list_group = Array<{|  Type: String,   Id: String,   "type": String,   DeveloperName: String,   Name: String|}> {"example": "[{\\\"Type\\\":\\\"Regular\\\",\\\"Id\\\":\\\"00G1t000000PzgXEAS\\\",\\\"type\\\":\\\"Group\\\",\\\"DeveloperName\\\":\\\"KYC_APAC\\\",\\\"Name\\\":\\\"KYC APAC\\\"},{\\\"Type\\\":\\\"Regular\\\",\\\"Id\\\":\\\"00G1t000000PzgcEAC\\\",\\\"type\\\":\\\"Group\\\",\\\"DeveloperName\\\":\\\"KYC_EMEA\\\",\\\"Name\\\":\\\"KYC_EMEA\\\"}]"}
+
+]]></types:shape>
+    </types:type>
+    <types:type name="list_user" format="json">
+      <types:shape format="weave" example="examples/list_user.json"><![CDATA[%dw 2.0
+
+type list_user = Array<{|  Username: String,   Id: String,   "type": String,   Name: String|}> {"example": "[{\\\"Username\\\":\\\"djoly.dev@efrontech.com\\\",\\\"Id\\\":\\\"0051t000000vFDbAAM\\\",\\\"type\\\":\\\"User\\\",\\\"Name\\\":\\\"David JOLY\\\"}]"}
+
+]]></types:shape>
+    </types:type>
+    <types:type name="error_message" format="java">
+      <types:shape format="raml"><![CDATA[#%RAML 1.0 DataType
+type: string]]></types:shape>
+    </types:type>
+    <types:type name="message" format="json">
+      <types:shape format="weave" example="examples/message.json"><![CDATA[%dw 2.0
+
+type message = {| text: String |} {"example": "{\\\"text\\\":\\\"list KYC_APAC\\\"}"}
+
+]]></types:shape>
+    </types:type>
+  </types:catalog>
+  <types:enrichment select="#b450f0b6-ad0c-4449-9a6c-3ad3be01c9d0">
+    <types:processor-declaration>
+      <types:output-event>
+        <types:message>
+          <types:payload type="list_group"/>
+        </types:message>
+      </types:output-event>
+    </types:processor-declaration>
+  </types:enrichment>
+  <types:enrichment select="#230a1190-cf5d-47a1-a273-8e1ed59bc06a">
+    <types:processor-declaration>
+      <types:input-event>
+        <types:message>
+          <types:payload type="list_user"/>
+        </types:message>
+      </types:input-event>
+    </types:processor-declaration>
+  </types:enrichment>
+  <types:enrichment select="#e116ebd7-4ceb-4045-802c-28afc4f76b3a">
+    <types:processor-declaration>
+      <types:input-event>
+        <types:message>
+          <types:payload type="error_message"/>
+        </types:message>
+      </types:input-event>
+    </types:processor-declaration>
+  </types:enrichment>
+  <types:enrichment select="#4253da18-0e7c-4fa1-b8da-8696d3998244">
+    <types:processor-declaration>
+      <types:input-event>
+        <types:message>
+          <types:payload type="message"/>
+        </types:message>
+      </types:input-event>
+    </types:processor-declaration>
+  </types:enrichment>
+</types:mule>

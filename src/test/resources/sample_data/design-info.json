@@ -1,0 +1,13 @@
+{
+  "sampleData": {
+    "c2c24551-130e-42ff-8584-91d0b874222b": {
+      "payload": "sample_data/bulkoperationresult.dwl"
+    },
+    "61c3057b-b297-4cb3-bef7-7b1deede8eb4": {
+      "payload": "sample_data/list_groupmember.dwl"
+    },
+    "b450f0b6-ad0c-4449-9a6c-3ad3be01c9d0": {
+      "payload": "sample_data/list_group.dwl"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "Type": "Regular",
+    "Id": "00G1t000000PzgXEAS",
+    "type": "Group",
+    "DeveloperName": "KYC_APAC",
+    "Name": "KYC APAC"
+  },
+  {
+    "Type": "Regular",
+    "Id": "00G1t000000PzgcEAC",
+    "type": "Group",
+    "DeveloperName": "KYC_EMEA",
+    "Name": "KYC_EMEA"
+  }
+]
